@@ -6,9 +6,9 @@ COPY requirements.txt /tmp/pip-tmp/
 ## Install requirements
 RUN apt update \
     && apt install --no-install-recommends -y \
-        python3-minimal python3-pip python3-setuptools \
-        openssl nmap psmisc iproute2 libcoap3-bin \
-    && pip3 --disable-pip-version-check install --no-cache-dir -r /tmp/pip-tmp/requirements.txt \
+        curl unzip python3-minimal python3-pip python3-dev python3-setuptools gcc \
+        openssl nmap psmisc iproute2 bluez bluetooth libcoap3-bin faketime \
+    && pip3 --disable-pip-version-check install --no-cache-dir --break-system-packages -r /tmp/pip-tmp/requirements.txt \
     && apt purge -y python3-pip python3-setuptools \
     && apt autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
