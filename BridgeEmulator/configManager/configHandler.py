@@ -78,6 +78,9 @@ class Config:
                 if float(config["apiversion"][:3]) < 1.56:
                     config["apiversion"] = "1.56.0"
 
+                if "swupdate2" not in config:
+                    config["swupdate2"] = { "autoinstall": { "on": True } }
+
                 self.yaml_config["config"] = config
             else:
                 self.yaml_config["config"] = {
@@ -108,6 +111,7 @@ class Config:
                     "hyperion": {"enabled":True},
                     "tpkasa": {"enabled":True},
                     "elgato": {"enabled":True},
+                    "swupdate2": { "autoinstall": { "on": True } }
                 }
             # load lights
             if os.path.exists(self.configDir + "/lights.yaml"):
