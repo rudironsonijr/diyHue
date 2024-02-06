@@ -17,4 +17,4 @@ yeelight
 python-kasa==0.4.1
 bleak==0.14.3
 rgbxy==0.5
-
+aioesphomeapi==21.0.1
