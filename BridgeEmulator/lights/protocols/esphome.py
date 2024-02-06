@@ -1,10 +1,23 @@
+from __future__ import annotations
+
+# Helper script and aioesphomeapi to discover api devices
+import asyncio
+import logging
+import sys
+from time import sleep
+from typing import cast
+
+from zeroconf import IPVersion, ServiceStateChange, Zeroconf, ServiceBrowser, ServiceInfo, ZeroconfServiceTypes
+from zeroconf.asyncio import AsyncServiceBrowser, AsyncServiceInfo, AsyncZeroconf
+
+import aioesphomeapi
+import asyncio
 import json
 import requests
 import logManager
 from functions.colors import convert_rgb_xy, convert_xy, hsv_to_rgb, rgbBrightness
 
 logging = logManager.logger.get_logger(__name__)
-
 
 def postRequest(address, request_data, timeout=3):
     head = {"Content-type": "application/json"}
@@ -46,6 +59,11 @@ def getLightType(light, data):
     return request_data
 
 def discover(detectedLights, device_ips):
+    logging.debug("ESPHome: <discover> invoked!")
+    # discover_v1(detectedLights, device_ips)
+    discover_v2(detectedLights, device_ips)
+
+def discover_v1(detectedLights, device_ips):
     logging.debug("ESPHome: <discover> invoked!")
 
     for ip in device_ips:
@@ -174,9 +192,6 @@ def set_light(light, data, rgb = None):
 
     postRequest(light.protocol_cfg["ip"], request_data)
 
-
-
-
 def get_light_state(light):
     logging.debug("ESPHome: <get_light_state> invoked!")
     state = {}
@@ -237,3 +252,103 @@ def get_light_state(light):
         elif toggle_device['state'] == 'ON':
             state['on'] = True
     return state
+
+def discover_v2():
+    try:
+        asyncio.run(discovery())
+    except KeyboardInterrupt:
+        pass
+
+
+FORMAT = "{: <7}|{: <32}|{: <15}|{: <12}|{: <16}|{: <10}|{: <32}"
+COLUMN_NAMES = ("Status", "Name", "Address", "MAC", "Version", "Platform", "Board")
+
+def decode_bytes_or_none(data: str | bytes | None) -> str | None:
+    """Decode bytes or return None."""
+    if data is None:
+        return None
+    if isinstance(data, bytes):
+        return data.decode()
+    return data
+
+def async_service_update(
+    zeroconf: Zeroconf,
+    service_type: str,
+    name: str,
+    state_change: ServiceStateChange,
+) -> None:
+    """Service state changed."""
+    short_name = name.partition(".")[0]
+    if state_change is ServiceStateChange.Removed:
+        state = "OFFLINE"
+    else:
+        state = "ONLINE"
+    info = AsyncServiceInfo(service_type, name)
+    info.load_from_cache(zeroconf)
+    properties = info.properties
+    mac = decode_bytes_or_none(properties.get(b"mac"))
+    version = decode_bytes_or_none(properties.get(b"version"))
+    platform = decode_bytes_or_none(properties.get(b"platform"))
+    board = decode_bytes_or_none(properties.get(b"board"))
+    address = ""
+    if addresses := info.ip_addresses_by_version(IPVersion.V4Only):
+        address = str(addresses[0])
+
+    logging.debug(FORMAT.format(state, short_name, address, mac, version, platform, board))
+
+# async def discovery() -> None:
+#     aiozc = AsyncZeroconf()
+#     browser = AsyncServiceBrowser(
+#         aiozc.zeroconf, "_esphomelib._tcp.local.", handlers=[async_service_update]
+#     )
+#     logging.debug(FORMAT.format(*COLUMN_NAMES))
+#     logging.debug("-" * 120)
+
+#     try:
+#         await asyncio.Event().wait()
+#     finally:
+#         await browser.async_cancel()
+#         await aiozc.async_close()
+
+
+def on_service_state_change(
+    zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange
+) -> None:
+    print(f"Service {name} of type {service_type} state changed: {state_change}")
+
+    if state_change is ServiceStateChange.Added:
+        info = zeroconf.get_service_info(service_type, name)
+        print("Info from zeroconf.get_service_info: %r" % (info))
+
+        if info:
+            addresses = ["%s:%d" % (addr, cast(int, info.port)) for addr in info.parsed_scoped_addresses()]
+            print("  Addresses: %s" % ", ".join(addresses))
+            print("  Weight: %d, priority: %d" % (info.weight, info.priority))
+            print(f"  Server: {info.server}")
+            if info.properties:
+                print("  Properties are:")
+                for key, value in info.properties.items():
+                    print(f"    {key!r}: {value!r}")
+            else:
+                print("  No properties")
+        else:
+            print("  No info")
+        print('\n')
+
+def discovery():
+    zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
+
+    # services = ["_http._tcp.local.", "_hap._tcp.local.", "_esphomelib._tcp.local.", "_airplay._tcp.local."]
+    services = ["_esphomelib._tcp.local."]
+    # services = list(ZeroconfServiceTypes.find(zc=zeroconf))
+
+    logging.debug("\nBrowsing %d service(s), press Ctrl-C to exit...\n" % len(services))
+    browser = ServiceBrowser(zeroconf, services, handlers=[on_service_state_change])
+
+    try:
+        while True:
+            sleep(0.1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        zeroconf.close()
