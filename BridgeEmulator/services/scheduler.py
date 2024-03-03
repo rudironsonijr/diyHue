@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, time, date
 from functions.request import sendRequest
 from functions.daylightSensor import daylightSensor
 from functions.scripts import triggerScript
+from services.updateManager import versionCheck, githubCheck
 
 bridgeConfig = configManager.bridgeConfig.yaml_config
 logging = logManager.logger.get_logger(__name__)
@@ -73,12 +74,12 @@ def runScheduler():
                                 minute = triggerTime["minute"],
                                 second = triggerTime["second"] if "second" in triggerTime else 0)
                             if "fade_in_duration" in obj.configuration or "turn_lights_off_after" in obj.configuration:
-                                fade_duration = obj.configuration["turn_lights_off_after"] if obj.active else obj.configuration["fade_in_duration"]
+                                fade_duration = obj.configuration["turn_lights_off_after"] if "turn_lights_off_after" in obj.configuration and obj.active else obj.configuration["fade_in_duration"]
                                 delta = timedelta(
                                     hours=fade_duration["hours"] if "hours" in fade_duration else 0,
                                     minutes=fade_duration["minutes"] if "minutes" in fade_duration else 0,
                                     seconds=fade_duration["seconds"] if "seconds" in fade_duration else 0)
-                                time_object = time_object + delta if obj.active else time_object - delta
+                                time_object = time_object + delta if "turn_lights_off_after" in obj.configuration and obj.active else time_object - delta
                             if datetime.now().second == time_object.second and datetime.now().minute == time_object.minute and datetime.now().hour == time_object.hour:
                                 logging.info("execute timmer: " + obj.name)
                                 Thread(target=triggerScript, args=[obj]).start()
@@ -104,6 +105,9 @@ def runScheduler():
         if (datetime.now().strftime("%M:%S") == "00:10"): #auto save configuration every hour
             configManager.bridgeConfig.save_config()
             Thread(target=daylightSensor, args=[bridgeConfig["config"]["timezone"], bridgeConfig["sensors"]["1"]]).start()
+            if (datetime.now().strftime("%H") == "23"): #check for updates every day at 23:00:10
+                versionCheck()
+                githubCheck()
             if (datetime.now().strftime("%H") == "23" and datetime.now().strftime("%A") == "Sunday"): #backup config every Sunday at 23:00:10
                 configManager.bridgeConfig.save_config(backup=True)
         sleep(1)

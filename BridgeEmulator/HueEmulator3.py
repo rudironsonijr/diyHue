@@ -12,6 +12,7 @@ from flaskUI.core import User #dummy import for flaks_login module
 from flaskUI.restful import NewUser, ShortConfig, EntireConfig, ResourceElements, Element, ElementParam, ElementParamId
 from flaskUI.v2restapi import AuthV1, ClipV2, ClipV2Resource, ClipV2ResourceId
 from flaskUI.espDevices import Switch
+from flaskUI.Credits import Credits
 from flaskUI.error_pages.handlers import error_pages
 from werkzeug.serving import WSGIRequestHandler
 from functions.daylightSensor import daylightSensor
@@ -34,7 +35,6 @@ login_manager.init_app(app)
 # Tell users what view to go to when they need to login.
 login_manager.login_view = "core.login"
 
-
 @login_manager.user_loader
 def user_loader(email):
     if email not in bridgeConfig["config"]["users"]:
@@ -43,7 +43,6 @@ def user_loader(email):
     user = User()
     user.id = email
     return user
-
 
 @login_manager.request_loader
 def request_loader(request):
@@ -61,6 +60,8 @@ def request_loader(request):
 
     return user
 
+### Licence/credits
+api.add_resource(Credits, '/licenses/<string:resource>', strict_slashes=False)
 ### ESP devices
 api.add_resource(Switch, '/switch')
 ### HUE API

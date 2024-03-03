@@ -14,13 +14,14 @@ from functions.core import nextFreeId
 from datetime import datetime
 from functions.scripts import behaviorScripts
 from pprint import pprint
+from lights.discover import scanForLights
 
 logging = logManager.logger.get_logger(__name__)
 
 bridgeConfig = configManager.bridgeConfig.yaml_config
 
 v2Resources = {"light": {}, "scene": {}, "grouped_light": {}, "room": {}, "zone": {
-}, "entertainment": {}, "entertainment_configuration": {}, "zigbee_connectivity": {}, "device": {}, "device_power": {},
+}, "entertainment": {}, "entertainment_configuration": {}, "zigbee_connectivity": {}, "zigbee_device_discovery": {}, "device": {}, "device_power": {},
 "geofence_client": {}}
 
 
@@ -103,6 +104,17 @@ def v2BridgeZigBee():
             "type": "zigbee_connectivity"
             }
 
+def v2BridgeZigBeeDiscovery():
+    return{"id": str(uuid.uuid5(
+        uuid.NAMESPACE_URL, bridgeConfig["config"]["bridgeid"] + 'zigbee_device_discovery')),
+           "owner": {
+              "rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridgeConfig["config"]["bridgeid"] + 'device')),
+              "rtype": "device"
+       },
+       "status": bridgeConfig["config"]["zigbee_device_discovery_info"]["status"],
+       "type": "zigbee_device_discovery",
+       }
+
 
 def v2GeofenceClient():
     user = authorizeV2(request.headers)
@@ -142,23 +154,16 @@ def v2BridgeHome():
 
 
 def v2Bridge():
+    bridge_id = bridgeConfig["config"]["bridgeid"]
     return {
-        "bridge_id": bridgeConfig["config"]["bridgeid"].lower(),
-        "id": str(uuid.uuid5(uuid.NAMESPACE_URL, bridgeConfig["config"]["bridgeid"] + 'bridge')),
+        "bridge_id": bridge_id.lower(),
+        "id": str(uuid.uuid5(uuid.NAMESPACE_URL, bridge_id + 'bridge')),
         "id_v1": "",
         "identify": {},
-        "owner": {
-            "rid": str(uuid.uuid5(
-                uuid.NAMESPACE_URL, bridgeConfig["config"]["bridgeid"] + 'device')),
-            "rtype": "device"
-        },
-        "time_zone": {
-            "time_zone": bridgeConfig["config"]["timezone"]
-        },
-
+        "owner": {"rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridge_id + 'device')), "rtype": "device"},
+        "time_zone": {"time_zone": bridgeConfig["config"]["timezone"]},
         "type": "bridge"
     }
-
 
 def geoLocation():
     return {
@@ -169,37 +174,26 @@ def geoLocation():
 
 
 def v2BridgeDevice():
-    result = {"id": str(uuid.uuid5(
-        uuid.NAMESPACE_URL, bridgeConfig["config"]["bridgeid"] + 'device')), "type": "device"}
+    config = bridgeConfig["config"]
+    bridge_id = config["bridgeid"]
+    result = {"id": str(uuid.uuid5(uuid.NAMESPACE_URL, bridge_id + 'device')), "type": "device"}
     result["id_v1"] = ""
-    result["metadata"] = {
-        "archetype": "bridge_v2",
-        "name": bridgeConfig["config"]["name"]
-    }
+    result["metadata"] = {"archetype": "bridge_v2", "name": config["name"]}
     result["product_data"] = {
         "certified": True,
         "manufacturer_name": "Signify Netherlands B.V.",
         "model_id": "BSB002",
         "product_archetype": "bridge_v2",
         "product_name": "Philips hue",
-        "software_version": bridgeConfig["config"]["apiversion"][:5] + bridgeConfig["config"]["swversion"]
+        "software_version": config["apiversion"][:5] + config["swversion"]
     }
     result["services"] = [
-        {
-            "rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridgeConfig["config"]["bridgeid"] + 'bridge')),
-            "rtype": "bridge"
-        },
-        {
-            "rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridgeConfig["config"]["bridgeid"] + 'zigbee_connectivity')),
-            "rtype": "zigbee_connectivity"
-        },
-        {
-            "rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridgeConfig["config"]["bridgeid"] + 'entertainment')),
-            "rtype": "entertainment"
-        }
+        {"rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridge_id + 'bridge')), "rtype": "bridge"},
+        {"rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridge_id + 'zigbee_connectivity')), "rtype": "zigbee_connectivity"},
+        {"rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridge_id + 'zigbee_device_discovery')), "rtype": "zigbee_device_discovery"},
+        {"rid": str(uuid.uuid5(uuid.NAMESPACE_URL, bridge_id + 'entertainment')), "rtype": "entertainment"}
     ]
     return result
-
 
 class AuthV1(Resource):
     def get(self):
@@ -237,6 +231,7 @@ class ClipV2(Resource):
         for key, sensor in bridgeConfig["sensors"].items():
             if sensor.getZigBee() != None:
                 data.append(sensor.getZigBee())
+        data.append(v2BridgeZigBeeDiscovery())
         # entertainment
         data.append(v2BridgeEntertainment())
         for key, light in bridgeConfig["lights"].items():
@@ -335,6 +330,8 @@ class ClipV2Resource(Resource):
                 if device != None:
                     response["data"].append(device)
             response["data"].append(v2BridgeDevice())  # the bridge
+        elif resource == "zigbee_device_discovery":
+            response["data"].append(v2BridgeZigBeeDiscovery())
         elif resource == "bridge":
             response["data"].append(v2Bridge())
         elif resource == "bridge_home":
@@ -510,6 +507,8 @@ class ClipV2ResourceId(Resource):
             return {"errors": [], "data": [object.getDevice()]}
         elif resource == "zigbee_connectivity":
             return {"errors": [], "data": [object.getZigBee()]}
+        elif resource == "zigbee_device_discovery":
+            return {"errors": [], "data": [object.getZigBeeDiscovery()]}
         elif resource == "entertainment":
             return {"errors": [], "data": [object.getV2Entertainment()]}
         elif resource == "entertainment_configuration":
@@ -583,6 +582,13 @@ class ClipV2ResourceId(Resource):
                 attrs['is_at_home'] = putDict['is_at_home']
             if hasattr(object, 'update_attr') and callable(getattr(object, 'update_attr')):
                 object.update_attr(attrs)
+        elif resource == "zigbee_device_discovery":
+            if putDict["action"]["action_type"] == "search":
+                bridgeConfig["config"]["zigbee_device_discovery_info"]["status"] = "active"
+                Thread(target=scanForLights).start()
+        elif resource == "device":
+            if putDict["identify"]["action"] == "identify":
+                object.setV1State({"alert": "select"})
         else:
             return {
                 "errors": [{

@@ -72,11 +72,27 @@ class Config:
                     config["elgato"] = {"enabled": True}
                 if "port" not in config:
                     config["port"] = {"enabled": False,"ports": [80]}
+                if "zigbee_device_discovery_info" not in config:
+                    config["zigbee_device_discovery_info"] = {"status": "ready"}
+                if "swupdate2" not in config:
+                    config["swupdate2"] = {"autoinstall": {
+                                                "on": True,
+                                                "updatetime": "T14:00:00"
+                                            },
+                                            "bridge": {
+                                                "lastinstall": "2020-12-11T17:08:55",
+                                                "state": "noupdates"
+                                            },
+                                            "checkforupdate": False,
+                                            "lastchange": "2020-12-13T10:30:15",
+                                            "state": "unknown",
+                                            "install": False
+                                            }
 
                 if int(config["swversion"]) < 1958077010:
-                    config["swversion"] = "1958077010"
+                    config["swversion"] = "1962154010"
                 if float(config["apiversion"][:3]) < 1.56:
-                    config["apiversion"] = "1.56.0"
+                    config["apiversion"] = "1.62.0"
 
                 if "swupdate2" not in config:
                     config["swupdate2"] = { "autoinstall": { "on": True } }
@@ -92,10 +108,10 @@ class Config:
                     "alarm":{"enabled": False,"lasttriggered": 0},
                     "port":{"enabled": False,"ports": [80]},
                     "apiUsers":{},
-                    "apiversion":"1.56.0",
+                    "apiversion":"1.62.0",
                     "name":"DiyHue Bridge",
                     "netmask":"255.255.255.0",
-                    "swversion":"19561788040",
+                    "swversion":"1962154010",
                     "timezone":"Europe/London",
                     "linkbutton":{"lastlinkbuttonpushed": 1599398980},
                     "users":{"admin@diyhue.org":{"password":"pbkdf2:sha256:150000$bqqXSOkI$199acdaf81c18f6ff2f29296872356f4eb78827784ce4b3f3b6262589c788742"}},
@@ -111,7 +127,20 @@ class Config:
                     "hyperion": {"enabled":True},
                     "tpkasa": {"enabled":True},
                     "elgato": {"enabled":True},
-                    "swupdate2": { "autoinstall": { "on": True } }
+                    "zigbee_device_discovery_info": {"status": "ready"},
+                    "swupdate2": {  "autoinstall": {
+                                        "on": True,
+                                        "updatetime": "T14:00:00"
+                                    },
+                                    "bridge": {
+                                        "lastinstall": "2020-12-11T17:08:55",
+                                        "state": "noupdates"
+                                    },
+                                    "checkforupdate": False,
+                                    "lastchange": "2020-12-13T10:30:15",
+                                    "state": "unknown",
+                                    "install": False
+                                    }
                 }
             # load lights
             if os.path.exists(self.configDir + "/lights.yaml"):
